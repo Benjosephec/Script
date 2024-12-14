@@ -1,69 +1,109 @@
-import argparse
 import os
-from lib import combine_csv, search_data, generate_report, validate_csv
-
-
-def parse_args():
-    """Analyse les arguments de la ligne de commande."""
-    parser = argparse.ArgumentParser(description="Gestion des stocks - Outil de commande")
-    
-    # Argument pour combiner les fichiers CSV
-    parser.add_argument("--combine", nargs='+', help="Combiner des fichiers CSV en un seul fichier", required=False)
-    
-    # Argument pour rechercher des informations dans le fichier consolidé
-    parser.add_argument("--search", nargs='+', help="Rechercher des informations par critères (clé valeur)", required=False)
-    
-    # Argument pour générer un rapport récapitulatif
-    parser.add_argument("--report", help="Générer un rapport récapitulatif des stocks par catégorie", required=False)
-    
-    return parser.parse_args()
-
-
-def combine_files(files):
-    """Combine les fichiers CSV donnés en un seul fichier consolidé."""
-    if len(files) < 2:
-        print("Veuillez fournir au moins deux fichiers à combiner.")
-        return
-    output_file = "stocks_combine.csv"
-    if all(validate_csv(file) for file in files):
-        combine_csv(files, output_file)
-
-
-def search_in_combined(criteria):
-    """Effectue une recherche dans le fichier consolidé en fonction des critères fournis."""
-    if not os.path.exists("stocks_combine.csv"):
-        print("Le fichier combiné 'stocks_combine.csv' n'existe pas. Veuillez d'abord combiner les fichiers.")
-        return
-    criteria_dict = {criteria[i]: criteria[i + 1] for i in range(0, len(criteria), 2)}
-    result = search_data("stocks_combine.csv", **criteria_dict)
-    if not result.empty:
-        print(result)
-    else:
-        print("Aucun résultat trouvé pour les critères spécifiés.")
-
-
-def generate_summary_report():
-    """Génère un rapport récapitulatif des stocks par catégorie."""
-    if not os.path.exists("stocks_combine.csv"):
-        print("Le fichier combiné 'stocks_combine.csv' n'existe pas. Veuillez d'abord combiner les fichiers.")
-        return
-    report_file = "rapport_stocks.csv"
-    generate_report("stocks_combine.csv", report_file)
-
+from lib import load_csv, search_product, generate_summary, sort_data, export_data, equality_check
 
 def main():
-    """Fonction principale d'exécution."""
-    args = parse_args()
+    inventory_data = []
+    header = []
+    
+    while True:
+        print("\nBienvenue dans le gestionnaire d'inventaire")
+        print("1. Charger un fichier CSV")
+        print("2. Rechercher un produit")
+        print("3. Générer un résumé par catégorie")
+        print("4. Trier les données")
+        print("5. Exporter les données")
+        print("6. Afficher les données")
+        print("7. Quitter")
+        
+        choice = input("Choisissez une option : ")
 
-    if args.combine:
-        combine_files(args.combine)
-    elif args.search:
-        search_in_combined(args.search)
-    elif args.report:
-        generate_summary_report()
-    else:
-        print("Aucune option valide fournie. Utilisez --help pour plus d'informations.")
+        if choice == "1":
+            # Charger les fichiers CSV
+            folder = input("Entrez le chemin du dossier contenant les fichiers CSV : ")
+            try:
+                files = [f for f in os.listdir(folder) if f.endswith('.csv')]
+                if not files:
+                    print(f"Aucun fichier CSV trouvé dans le dossier {folder}")
+                    continue
+                for file in files:
+                    file_path = os.path.join(folder, file)
+                    print(f"Chargement de {file_path}...")
+                    new_header, new_data = load_csv(file_path)
+                    
+                    if header and not equality_check(header, new_header):
+                        print(f"Les en-têtes du fichier {file} ne correspondent. Ignoré.")
+                        continue
+                    
+                    if not header:
+                        header = new_header
+                    inventory_data.extend(new_data)
+                print("Fichiers CSV chargés avec succès.")
+            except FileNotFoundError as e:
+                print(e)
 
+        elif choice == "2":
+            # Recherche d'un produit
+            product_name = input("Entrez le nom du produit à rechercher : ")
+            found_products = search_product(inventory_data, product_name)
+            if found_products:
+                print("Produit(s) trouvé(s) :")
+                for product in found_products:
+                    print(product)
+            else:
+                print("Aucun produit trouvé.")
+
+        elif choice == "3":
+            # Générer un résumé des stocks par catégorie
+            summary = generate_summary(inventory_data)
+            print("Résumé des stocks par catégorie :")
+            for category, stats in summary.items():
+                print(f"{category}: Quantité totale = {stats['total_quantity']}, Prix moyen = {stats['average_price']:.2f}")
+
+        elif choice == "4":
+            # Trier les données
+            print("1. Trier par produit")
+            print("2. Trier par quantité")
+            print("3. Trier par prix unitaire")
+            column_choice = input("Choisissez la colonne pour trier : ")
+            reverse_choice = input("Trier dans l'ordre inverse (o/n) ? : ")
+
+            reverse = reverse_choice.lower() == "o"
+
+            if column_choice == "1":
+                sorted_data = sort_data(inventory_data, 0, reverse)  # Trier par produit
+            elif column_choice == "2":
+                sorted_data = sort_data(inventory_data, 1, reverse)  # Trier par quantité
+            elif column_choice == "3":
+                sorted_data = sort_data(inventory_data, 2, reverse)  # Trier par prix
+            else:
+                print("Choix invalide.")
+                continue
+
+            print("Données triées avec succès.")
+            inventory_data = sorted_data
+
+        elif choice == "5":
+            # Exporter les données dans un fichier CSV
+            export_path = input("Entrez le nom du fichier d'export (ex. export.csv) : ")
+            export_data(export_path, inventory_data, header)
+            print(f"Données exportées dans {export_path}.")
+
+        elif choice == "6":
+            # Afficher les données
+            if not inventory_data:
+                print("Aucune donnée à afficher.")
+            else:
+                print(f"\n{header}")
+                for row in inventory_data:
+                    print(row)
+
+        elif choice == "7":
+            # Quitter le programme
+            print("Au revoir !")
+            break
+
+        else:
+            print("Option invalide. Veuillez réessayer.")
 
 if __name__ == "__main__":
     main()
