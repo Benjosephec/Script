@@ -1,43 +1,64 @@
-import os
 import argparse
-from lib import consolider_csv, rechercher_produit, generer_rapport
+from lib import load_csv, write_csv, merge_csv, sort_data
+
 
 def main():
-    parser = argparse.ArgumentParser(description="Gestion d'inventaire en ligne de commande")
-    
-    parser.add_argument("--consolider", help="Consolider les fichiers CSV dans un fichier unique", action="store_true")
-    parser.add_argument("--rechercher", help="Rechercher des produits", action="store_true")
-    parser.add_argument("--rapport", help="Générer un rapport récapitulatif", type=str)
-    
+    parser = argparse.ArgumentParser(
+        description="Programme pour manipuler des fichiers CSV : fusion, tri et export."
+    )
+    parser.add_argument(
+        "file",
+        nargs="+",
+        help="Un ou plusieurs fichiers CSV à charger. Si plusieurs fichiers sont donnés, ils seront fusionnés.",
+    )
+    parser.add_argument(
+        "-o", "--output",
+        default=None,
+        help="Nom du fichier CSV de sortie pour sauvegarder les résultats.",
+    )
+    parser.add_argument(
+        "-s", "--sort",
+        default=None,
+        help="Nom de la colonne selon laquelle trier les données.",
+    )
+    parser.add_argument(
+        "--force-overwrite",
+        action="store_true",
+        help="Forcer l'écrasement du fichier de sortie s'il existe déjà.",
+    )
+
     args = parser.parse_args()
-    
-    if args.consolider:
-        chemin = "data"
-        fichier_consolide = "output/inventaire_consolide.csv"
-        consolider_csv(chemin, fichier_consolide)
-        print(f"Consolidation terminée : {fichier_consolide}")
-    
-    elif args.rechercher:
-        fichier = "output/inventaire_consolide.csv"
-        if not os.path.exists(fichier):
-            print(f"Le fichier consolidé {fichier} n'existe pas. Veuillez d'abord exécuter --consolider.")
-        else:
-            recherche = input("Entrez un critère de recherche (nom, catégorie ou prix) : ")
-            resultats = rechercher_produit(fichier, recherche)
-            if resultats.empty:
-                print("Aucun résultat trouvé.")
-            else:
-                print(resultats)
-    
-    elif args.rapport:
-        fichier = "output/inventaire_consolide.csv"
-        if not os.path.exists(fichier):
-            print(f"Le fichier consolidé {fichier} n'existe pas. Veuillez d'abord exécuter --consolider.")
-        else:
-            generer_rapport(fichier, args.rapport)
-            print(f"Rapport généré : {args.rapport}")
+
+    # Vérification du fichier de sortie
+    if args.output and not args.output.endswith(".csv"):
+        raise ValueError("Le fichier de sortie doit avoir une extension .csv")
+
+    data = []
+    header = None
+
+    # Charger et fusionner les fichiers
+    if len(args.file) > 1:
+        header, data = merge_csv(args.file, data, header)
     else:
-        print("Aucune action spécifiée. Utilisez --help pour les options disponibles.")
+        header, data = load_csv(args.file[0])
+
+    # Trier les données si demandé
+    if args.sort:
+        try:
+            data = sort_data(data, header, args.sort)
+        except ValueError as e:
+            print(f"Erreur lors du tri : {e}")
+            return
+
+    # Exporter ou afficher les résultats
+    if args.output:
+        write_csv(args.output, data, header, force_overwrite=args.force_overwrite)
+        print(f"Les résultats ont été sauvegardés dans : {args.output}")
+    else:
+        print("En-têtes :", header)
+        for row in data:
+            print(row)
+
 
 if __name__ == "__main__":
     main()
