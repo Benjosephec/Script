@@ -4,6 +4,10 @@ from lib import *
 
 class TestInventoryManager(unittest.TestCase):
 
+    def test_load_csv_file_not_found(self):
+        with self.assertRaises(FileNotFoundError):
+            load_csv("data/non_existing_file.csv")
+
     # Test for load_csv with a real CSV file in the /data directory
     def test_load_csv_valid(self):
         file_path = 'data/test.csv'  # Ensure this file exists in the /data folder
@@ -105,6 +109,7 @@ class TestInventoryManager(unittest.TestCase):
 
         # After sorting, we expect the invalid "NaN" to be at the end of the list
         self.assertEqual(sorted_data[0], ["ProductA", "10", "20.5", "Category1"])
+
 
 if __name__ == '__main__':
     unittest.main()
