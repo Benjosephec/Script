@@ -1,63 +1,68 @@
 import argparse
-from lib import load_csv, write_csv, merge_csv, sort_data
+import os
+from lib import combine_csv, search_data, generate_report, validate_csv
+
+
+def parse_args():
+    """Analyse les arguments de la ligne de commande."""
+    parser = argparse.ArgumentParser(description="Gestion des stocks - Outil de commande")
+    
+    # Argument pour combiner les fichiers CSV
+    parser.add_argument("--combine", nargs='+', help="Combiner des fichiers CSV en un seul fichier", required=False)
+    
+    # Argument pour rechercher des informations dans le fichier consolidé
+    parser.add_argument("--search", nargs='+', help="Rechercher des informations par critères (clé valeur)", required=False)
+    
+    # Argument pour générer un rapport récapitulatif
+    parser.add_argument("--report", help="Générer un rapport récapitulatif des stocks par catégorie", required=False)
+    
+    return parser.parse_args()
+
+
+def combine_files(files):
+    """Combine les fichiers CSV donnés en un seul fichier consolidé."""
+    if len(files) < 2:
+        print("Veuillez fournir au moins deux fichiers à combiner.")
+        return
+    output_file = "stocks_combine.csv"
+    if all(validate_csv(file) for file in files):
+        combine_csv(files, output_file)
+
+
+def search_in_combined(criteria):
+    """Effectue une recherche dans le fichier consolidé en fonction des critères fournis."""
+    if not os.path.exists("stocks_combine.csv"):
+        print("Le fichier combiné 'stocks_combine.csv' n'existe pas. Veuillez d'abord combiner les fichiers.")
+        return
+    criteria_dict = {criteria[i]: criteria[i + 1] for i in range(0, len(criteria), 2)}
+    result = search_data("stocks_combine.csv", **criteria_dict)
+    if not result.empty:
+        print(result)
+    else:
+        print("Aucun résultat trouvé pour les critères spécifiés.")
+
+
+def generate_summary_report():
+    """Génère un rapport récapitulatif des stocks par catégorie."""
+    if not os.path.exists("stocks_combine.csv"):
+        print("Le fichier combiné 'stocks_combine.csv' n'existe pas. Veuillez d'abord combiner les fichiers.")
+        return
+    report_file = "rapport_stocks.csv"
+    generate_report("stocks_combine.csv", report_file)
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Programme pour manipuler des fichiers CSV : fusion, tri et export."
-    )
-    parser.add_argument(
-        "file",
-        nargs="+",
-        help="Un ou plusieurs fichiers CSV à charger. Si plusieurs fichiers sont donnés, ils seront fusionnés.",
-    )
-    parser.add_argument(
-        "-o", "--output",
-        default=None,
-        help="Nom du fichier CSV de sortie pour sauvegarder les résultats.",
-    )
-    parser.add_argument(
-        "-s", "--sort",
-        default=None,
-        help="Nom de la colonne selon laquelle trier les données.",
-    )
-    parser.add_argument(
-        "--force-overwrite",
-        action="store_true",
-        help="Forcer l'écrasement du fichier de sortie s'il existe déjà.",
-    )
+    """Fonction principale d'exécution."""
+    args = parse_args()
 
-    args = parser.parse_args()
-
-    # Vérification du fichier de sortie
-    if args.output and not args.output.endswith(".csv"):
-        raise ValueError("Le fichier de sortie doit avoir une extension .csv")
-
-    data = []
-    header = None
-
-    # Charger et fusionner les fichiers
-    if len(args.file) > 1:
-        header, data = merge_csv(args.file, data, header)
+    if args.combine:
+        combine_files(args.combine)
+    elif args.search:
+        search_in_combined(args.search)
+    elif args.report:
+        generate_summary_report()
     else:
-        header, data = load_csv(args.file[0])
-
-    # Trier les données si demandé
-    if args.sort:
-        try:
-            data = sort_data(data, header, args.sort)
-        except ValueError as e:
-            print(f"Erreur lors du tri : {e}")
-            return
-
-    # Exporter ou afficher les résultats
-    if args.output:
-        write_csv(args.output, data, header, force_overwrite=args.force_overwrite)
-        print(f"Les résultats ont été sauvegardés dans : {args.output}")
-    else:
-        print("En-têtes :", header)
-        for row in data:
-            print(row)
+        print("Aucune option valide fournie. Utilisez --help pour plus d'informations.")
 
 
 if __name__ == "__main__":
